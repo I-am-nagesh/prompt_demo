@@ -1,43 +1,20 @@
-const SYSTEM_PROMPT = `You are a world-class AI Prompt Builder and Prompt Engineer. Your sole purpose is to take any rough, vague, or simple idea from a user and transform it into a highly detailed, structured, and effective prompt that will produce outstanding results on any AI tool.
+import { TEMPLATES } from "./templates.js";
 
-You are NOT a general assistant. You ONLY build and enhance prompts. Nothing else.
+const CLASSIFIER_PROMPT = `
+Classify the user's request into exactly one category.
 
-Your expertise covers ALL prompt types:
-- IMAGE GENERATION (Midjourney, DALL-E, Stable Diffusion)
-- WRITING (blogs, stories, emails, essays, social media)
-- VIDEO CREATION (Sora, Pika, Runway)
-- CODING (any language or framework)
-- MARKETING & ADS (copy, campaigns, captions)
-- EDUCATION & EXPLANATION (concepts, tutorials)
-- BUSINESS (plans, proposals, reports)
+Categories:
+IMAGE
+CODING
+WRITING
+PRESENTATION
+BUSINESS
+LEARNING
 
-HOW TO ENHANCE:
-1. Detect the task type from the user's rough input
-2. Add precise technical vocabulary for that domain
-3. Preserve the user's original intent
-4. Make the prompt specific, clear, and actionable
-5. If the input is very short, intelligently infer reasonable details without changing the intent
-
-OUTPUT FORMAT:
-
-TASK TYPE: [detected type]
-
-ENHANCED PROMPT:
-• [Bullet 1]
-• [Bullet 2]
-• [Bullet 3]
-• [Bullet 4]
-• [Bullet 5]
-
-FULL PROMPT (copy-ready):
-[Final enhanced prompt]
-
-WHY THIS WORKS:
-[One sentence explanation]
+Return ONLY the category name.
 `;
 
 export default async function handler(req, res) {
-  // Allow only POST requests
   if (req.method !== "POST") {
     return res.status(405).json({
       error: "Method not allowed",
@@ -53,6 +30,46 @@ export default async function handler(req, res) {
       });
     }
 
+    // Step 1: Detect category
+    const classifierResponse = await fetch(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "llama-3.3-70b-versatile",
+          temperature: 0,
+          messages: [
+            {
+              role: "system",
+              content: CLASSIFIER_PROMPT,
+            },
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+        }),
+      }
+    );
+
+    const classifierData = await classifierResponse.json();
+
+    let category =
+      classifierData?.choices?.[0]?.message?.content
+        ?.trim()
+        ?.toUpperCase() || "WRITING";
+
+    if (!TEMPLATES[category]) {
+      category = "WRITING";
+    }
+
+    const selectedTemplate = TEMPLATES[category];
+
+    // Step 2: Generate enhanced prompt
     const response = await fetch(
       "https://api.groq.com/openai/v1/chat/completions",
       {
@@ -67,7 +84,7 @@ export default async function handler(req, res) {
           messages: [
             {
               role: "system",
-              content: SYSTEM_PROMPT,
+              content: selectedTemplate,
             },
             {
               role: "user",
@@ -93,6 +110,7 @@ export default async function handler(req, res) {
       "No response generated.";
 
     return res.status(200).json({
+      category,
       result: enhancedPrompt,
     });
   } catch (error) {
