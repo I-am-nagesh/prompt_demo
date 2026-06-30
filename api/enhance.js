@@ -1,4 +1,4 @@
-import { TEMPLATES } from "./templates.js";
+import { CORE_PROMPT, DOMAIN_EXTENSIONS } from "./templates.js";
 
 const CLASSIFIER_PROMPT = `
 Classify the user's request into exactly one category.
@@ -30,6 +30,8 @@ export default async function handler(req, res) {
       });
     }
 
+    const trimmedInput = prompt.trim();
+
     // Step 1: Detect category
     const classifierResponse = await fetch(
       "https://api.groq.com/openai/v1/chat/completions",
@@ -49,7 +51,7 @@ export default async function handler(req, res) {
             },
             {
               role: "user",
-              content: prompt,
+              content: trimmedInput,
             },
           ],
         }),
@@ -63,13 +65,16 @@ export default async function handler(req, res) {
         ?.trim()
         ?.toUpperCase() || "WRITING";
 
-    if (!TEMPLATES[category]) {
-      category = "WRITING";
-    }
+    // Enforce valid fallback if the classifier hallucinates extra words
+    const validDomains = ["IMAGE", "CODING", "WRITING", "PRESENTATION", "BUSINESS", "LEARNING"];
+    const matchedCategory = validDomains.find((d) => category.includes(d));
+    category = matchedCategory || "WRITING";
 
-    const selectedTemplate = TEMPLATES[category];
+    // Step 2: Compose the unified template (CORE_PROMPT + DOMAIN_EXTENSION)
+    const selectedExtension = DOMAIN_EXTENSIONS[category] || DOMAIN_EXTENSIONS.WRITING;
+    const universalSystemPrompt = `${CORE_PROMPT}\n\n${selectedExtension}`;
 
-    // Step 2: Generate enhanced prompt
+    // Step 3: Generate enhanced prompt
     const response = await fetch(
       "https://api.groq.com/openai/v1/chat/completions",
       {
@@ -84,11 +89,11 @@ export default async function handler(req, res) {
           messages: [
             {
               role: "system",
-              content: selectedTemplate,
+              content: universalSystemPrompt,
             },
             {
               role: "user",
-              content: prompt,
+              content: `Optimize this prompt concept: "${trimmedInput}"`,
             },
           ],
         }),
@@ -99,15 +104,19 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       console.error("Groq Error:", data);
-
       return res.status(500).json({
         error: "Failed to generate prompt",
       });
     }
 
-    const enhancedPrompt =
-      data?.choices?.[0]?.message?.content ||
-      "No response generated.";
+    let enhancedPrompt =
+      data?.choices?.[0]?.message?.content || "No response generated.";
+
+    // Post-processing guardrail: Clean up any rogue Markdown triple-backticks if generated
+    enhancedPrompt = enhancedPrompt
+      .replace(/^```[a-zA-Z]*\n/gm, "")
+      .replace(/```$/gm, "")
+      .trim();
 
     return res.status(200).json({
       category,
@@ -115,7 +124,6 @@ export default async function handler(req, res) {
     });
   } catch (error) {
     console.error("Server Error:", error);
-
     return res.status(500).json({
       error: "Internal server error",
     });
