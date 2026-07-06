@@ -14,20 +14,54 @@ LEARNING
 Return ONLY the category name.
 `;
 
+// Helper function to log search metrics directly to Supabase via light REST API
+async function logToSupabase(rawPrompt, category, enhancedPrompt, reqHeaders) {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    console.warn("Supabase credentials missing. Analytics log skipped.");
+    return;
+  }
+
+  // Extract Vercel regional geographic metadata and device configuration details
+  const country = reqHeaders["x-vercel-ip-country"] || "unknown";
+  const userAgent = reqHeaders["user-agent"] || "";
+  const isMobile = /mobile|android|iphone|ipad|phone/i.test(userAgent);
+  const deviceType = isMobile ? "Mobile" : "Desktop";
+
+  try {
+    await fetch(`${supabaseUrl}/rest/v1/search_logs`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": supabaseKey,
+        "Authorization": `Bearer ${supabaseKey}`,
+        "Prefer": "return=minimal"
+      },
+      body: JSON.stringify({
+        raw_prompt: rawPrompt,
+        detected_category: category,
+        enhanced_prompt: enhancedPrompt,
+        country: country,
+        device_type: deviceType
+      })
+    });
+  } catch (err) {
+    console.error("Failed to write upstream telemetry parameters to Supabase:", err);
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).json({
-      error: "Method not allowed",
-    });
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
     const { prompt } = req.body;
 
     if (!prompt || !prompt.trim()) {
-      return res.status(400).json({
-        error: "Prompt is required",
-      });
+      return res.status(400).json({ error: "Prompt is required" });
     }
 
     const trimmedInput = prompt.trim();
@@ -45,14 +79,8 @@ export default async function handler(req, res) {
           model: "llama-3.3-70b-versatile",
           temperature: 0,
           messages: [
-            {
-              role: "system",
-              content: CLASSIFIER_PROMPT,
-            },
-            {
-              role: "user",
-              content: trimmedInput,
-            },
+            { role: "system", content: CLASSIFIER_PROMPT },
+            { role: "user", content: trimmedInput },
           ],
         }),
       }
@@ -61,16 +89,13 @@ export default async function handler(req, res) {
     const classifierData = await classifierResponse.json();
 
     let category =
-      classifierData?.choices?.[0]?.message?.content
-        ?.trim()
-        ?.toUpperCase() || "WRITING";
+      classifierData?.choices?.[0]?.message?.content?.trim()?.toUpperCase() || "WRITING";
 
-    // Enforce valid fallback if the classifier hallucinates extra words
     const validDomains = ["IMAGE", "CODING", "WRITING", "PRESENTATION", "BUSINESS", "LEARNING"];
     const matchedCategory = validDomains.find((d) => category.includes(d));
     category = matchedCategory || "WRITING";
 
-    // Step 2: Compose the unified template (CORE_PROMPT + DOMAIN_EXTENSION)
+    // Step 2: Compose unified template
     const selectedExtension = DOMAIN_EXTENSIONS[category] || DOMAIN_EXTENSIONS.WRITING;
     const universalSystemPrompt = `${CORE_PROMPT}\n\n${selectedExtension}`;
 
@@ -87,14 +112,8 @@ export default async function handler(req, res) {
           model: "llama-3.3-70b-versatile",
           temperature: 0.7,
           messages: [
-            {
-              role: "system",
-              content: universalSystemPrompt,
-            },
-            {
-              role: "user",
-              content: `Optimize this prompt concept: "${trimmedInput}"`,
-            },
+            { role: "system", content: universalSystemPrompt },
+            { role: "user", content: `Optimize this prompt concept: "${trimmedInput}"` },
           ],
         }),
       }
@@ -104,19 +123,18 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       console.error("Groq Error:", data);
-      return res.status(500).json({
-        error: "Failed to generate prompt",
-      });
+      return res.status(500).json({ error: "Failed to generate prompt" });
     }
 
-    let enhancedPrompt =
-      data?.choices?.[0]?.message?.content || "No response generated.";
+    let enhancedPrompt = data?.choices?.[0]?.message?.content || "No response generated.";
 
-    // Post-processing guardrail: Clean up any rogue Markdown triple-backticks if generated
     enhancedPrompt = enhancedPrompt
       .replace(/^```[a-zA-Z]*\n/gm, "")
       .replace(/```$/gm, "")
       .trim();
+
+    // --- STEP 4: Fire-and-forget logging to Supabase with request headers ---
+    logToSupabase(trimmedInput, category, enhancedPrompt, req.headers);
 
     return res.status(200).json({
       category,
@@ -124,8 +142,6 @@ export default async function handler(req, res) {
     });
   } catch (error) {
     console.error("Server Error:", error);
-    return res.status(500).json({
-      error: "Internal server error",
-    });
+    return res.status(500).json({ error: "Internal server error" });
   }
 }
