@@ -231,14 +231,21 @@ function App() {
           </div>
         </div>
 
-        {/* Main Operational Prompt Panel */}
-        <main className="bg-slate-900 rounded-2xl border border-slate-800 p-5 sm:p-6 shadow-xl space-y-4">
+        {/* STEP 1 WORKSPACE: Main Operational Prompt Panel Refactored */}
+        <main className="bg-slate-900 rounded-2xl border border-slate-800 p-5 sm:p-6 shadow-xl space-y-4 relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-indigo-500/50 to-transparent" />
+          
           <div className="flex justify-between items-center">
-            <label className="text-sm font-semibold tracking-wide text-slate-300">
-              Prompt Input Terminal
-            </label>
-            <span className="text-xs text-slate-500">
-              Accepts phrases or raw ideas
+            <div className="flex items-center gap-2">
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-indigo-500 text-[10px] font-bold text-white">
+                1
+              </span>
+              <label className="text-sm font-bold tracking-wide text-slate-200">
+                Search or Enter Your Prompt Concept
+              </label>
+            </div>
+            <span className="text-xs text-slate-500 font-medium">
+              Type anything & press optimize
             </span>
           </div>
 
@@ -256,29 +263,14 @@ function App() {
           >
             {loading ? (
               <>
-                <svg
-                  className="animate-spin h-5 w-5 text-current"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
+                <svg className="animate-spin h-5 w-5 text-current" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
-                <span>Processing Blueprint...</span>
+                <span>Engineering Your Prompt Structure...</span>
               </>
             ) : (
-              "Optimize Prompt Structure"
+              "Optimize Prompt Structure ↓"
             )}
           </button>
         </main>
@@ -290,42 +282,59 @@ function App() {
           </div>
         )}
 
-        {/* Structured Output Generation Terminal Anchor */}
-        {output && (
-          <section
-            id="output-terminal"
-            className="bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-3 duration-300"
-          >
-            <div className="flex justify-between items-center px-5 py-4 bg-slate-900/50 border-b border-slate-800/80">
-              <div className="flex items-center gap-2.5">
-                <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                <h2 className="text-sm font-bold uppercase tracking-wider text-slate-300">
-                  Optimized Execution Prompt
-                </h2>
-                {detectedDomain && (
-                  <span className="text-[10px] bg-slate-800 border border-slate-700 px-2 py-0.5 rounded text-slate-400 font-mono">
-                    {detectedDomain}
+        {/* STEP 2 WORKSPACE: Output Presentation System Refactored */}
+        <div id="output-terminal" className="space-y-3 pt-2">
+          <div className="flex items-center gap-2">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">
+              2
+            </span>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">
+              Your Optimized Prompt Engine Output
+            </h3>
+          </div>
+
+          {output ? (
+            /* Active Output Box */
+            <section className="bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-3 duration-300">
+              <div className="flex justify-between items-center px-5 py-4 bg-slate-900/50 border-b border-slate-800/80">
+                <div className="flex items-center gap-2.5">
+                  <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                    Ready to Copy & Paste
                   </span>
-                )}
+                  {detectedDomain && (
+                    <span className="text-[10px] bg-slate-800 border border-slate-700 px-2 py-0.5 rounded text-slate-400 font-mono">
+                      {detectedDomain}
+                    </span>
+                  )}
+                </div>
+
+                <button
+                  onClick={copyOutput}
+                  className={`text-xs font-bold tracking-wide px-4 py-2 rounded-lg transition-all duration-200 shadow-sm flex items-center gap-1.5 min-w-[85px] justify-center ${
+                    copied 
+                      ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" 
+                      : "bg-indigo-600 hover:bg-indigo-500 text-white"
+                  }`}
+                >
+                  {copied ? "✓ Copied!" : "🗐 Copy"}
+                </button>
               </div>
 
-              <button
-                onClick={copyOutput}
-                className={`text-xs font-bold tracking-wide px-4 py-2 rounded-lg transition-all duration-200 shadow-sm flex items-center gap-1.5 min-w-[85px] justify-center ${
-                  copied
-                    ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                    : "bg-indigo-600 hover:bg-indigo-500 text-white"
-                }`}
-              >
-                {copied ? "✓ Copied!" : "🗐 Copy"}
-              </button>
+              <div className="p-5 sm:p-6 bg-slate-950/60 font-mono text-sm leading-relaxed text-slate-200 select-all whitespace-pre-wrap max-h-[400px] overflow-y-auto">
+                {output}
+              </div>
+            </section>
+          ) : (
+            /* Elegant Placeholder Container when empty */
+            <div className="border-2 border-dashed border-slate-800 rounded-2xl p-8 text-center bg-slate-900/20 transition-all">
+              <div className="text-3xl mb-2 text-slate-700">📋</div>
+              <p className="text-sm text-slate-500 font-medium max-w-xs mx-auto">
+                Your elite, structured prompt framework will generate instantly here once you run a search.
+              </p>
             </div>
-
-            <div className="p-5 sm:p-6 bg-slate-950/60 font-mono text-sm leading-relaxed text-slate-200 select-all whitespace-pre-wrap max-h-[400px] overflow-y-auto">
-              {output}
-            </div>
-          </section>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
