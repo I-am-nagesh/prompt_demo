@@ -14,30 +14,28 @@ LEARNING
 Return ONLY the category name.
 `;
 
-// Helper function to log search metrics directly to Supabase via light REST API
+// Change to an awaited helper function
 async function logToSupabase(rawPrompt, category, enhancedPrompt, reqHeaders) {
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
-    console.warn("Supabase credentials missing. Analytics log skipped.");
+    console.error("Supabase credentials missing from Vercel environment variables.");
     return;
   }
 
-  // Extract Vercel regional geographic metadata and device configuration details
   const country = reqHeaders["x-vercel-ip-country"] || "unknown";
   const userAgent = reqHeaders["user-agent"] || "";
   const isMobile = /mobile|android|iphone|ipad|phone/i.test(userAgent);
   const deviceType = isMobile ? "Mobile" : "Desktop";
 
   try {
-    await fetch(`${supabaseUrl}/rest/v1/search_logs`, {
+    const res = await fetch(`${supabaseUrl}/rest/v1/search_logs`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "apikey": supabaseKey,
         "Authorization": `Bearer ${supabaseKey}`,
-        "Prefer": "return=minimal"
       },
       body: JSON.stringify({
         raw_prompt: rawPrompt,
@@ -47,8 +45,13 @@ async function logToSupabase(rawPrompt, category, enhancedPrompt, reqHeaders) {
         device_type: deviceType
       })
     });
+
+    if (!res.ok) {
+      const errLog = await res.text();
+      console.error(`Supabase API rejected post. Status: ${res.status}, Error: ${errLog}`);
+    }
   } catch (err) {
-    console.error("Failed to write upstream telemetry parameters to Supabase:", err);
+    console.error("Failed to reach Supabase API network bridge:", err);
   }
 }
 
@@ -133,8 +136,8 @@ export default async function handler(req, res) {
       .replace(/```$/gm, "")
       .trim();
 
-    // --- STEP 4: Fire-and-forget logging to Supabase with request headers ---
-    logToSupabase(trimmedInput, category, enhancedPrompt, req.headers);
+    // --- STEP 4: ADD AWAIT HERE TO HOLD THE TIMEOUT ON VERCEL ---
+    await logToSupabase(trimmedInput, category, enhancedPrompt, req.headers);
 
     return res.status(200).json({
       category,
