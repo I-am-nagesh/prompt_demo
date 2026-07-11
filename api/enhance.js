@@ -20,7 +20,7 @@ async function logToSupabase(rawPrompt, category, enhancedPrompt, reqHeaders) {
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
-    console.error("Supabase credentials missing from Vercel environment variables.");
+    console.warn("Supabase credentials missing. Analytics log skipped.");
     return;
   }
 
@@ -29,29 +29,29 @@ async function logToSupabase(rawPrompt, category, enhancedPrompt, reqHeaders) {
   const isMobile = /mobile|android|iphone|ipad|phone/i.test(userAgent);
   const deviceType = isMobile ? "Mobile" : "Desktop";
 
+  // Capture the secure Google User UUID sent from the frontend request headers
+  const authenticatedUserId = reqHeaders["x-user-id"] || null;
+
   try {
-    const res = await fetch(`${supabaseUrl}/rest/v1/search_logs`, {
+    await fetch(`${supabaseUrl}/rest/v1/search_logs`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "apikey": supabaseKey,
         "Authorization": `Bearer ${supabaseKey}`,
+        "Prefer": "return=minimal"
       },
       body: JSON.stringify({
         raw_prompt: rawPrompt,
         detected_category: category,
         enhanced_prompt: enhancedPrompt,
         country: country,
-        device_type: deviceType
+        device_type: deviceType,
+        user_id: authenticatedUserId // Links to their Google account if logged in, otherwise null
       })
     });
-
-    if (!res.ok) {
-      const errLog = await res.text();
-      console.error(`Supabase API rejected post. Status: ${res.status}, Error: ${errLog}`);
-    }
   } catch (err) {
-    console.error("Failed to reach Supabase API network bridge:", err);
+    console.error("Failed to write to Supabase log table:", err);
   }
 }
 
