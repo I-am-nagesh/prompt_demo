@@ -64,12 +64,14 @@ function App() {
     return Number(localStorage.getItem("anon_search_count")) || 0;
   });
 
-  // Automatically sync current session and watch auth lifecycle state
+  // Automatically sync current session and watch auth lifecycle state stably
   useEffect(() => {
+    // 1. Get initial session on page load
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
     });
 
+    // 2. Listen continuously for authentication changes (Sign In / Sign Out)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       if (session?.user) {
@@ -87,7 +89,7 @@ function App() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: window.location.origin // Automatically brings them straight back here
+          redirectTo: window.location.origin
         }
       });
       if (error) throw error;
@@ -99,6 +101,7 @@ function App() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    setUser(null);
   };
 
   const handleEnhance = async (overrideInput = null) => {
@@ -125,7 +128,10 @@ function App() {
 
     try {
       const headers = { "Content-Type": "application/json" };
-      if (user) headers["x-user-id"] = user.id;
+      // Explicitly inject the user ID directly into headers if session is ready
+      if (user) {
+        headers["x-user-id"] = user.id;
+      }
 
       const response = await fetch("/api/enhance", {
         method: "POST",
@@ -182,11 +188,17 @@ function App() {
     }
   };
 
+  // Helper extraction to pull the user's friendly name out of Google's metadata payload safely
+  const getUserDisplayName = () => {
+    if (!user) return "";
+    return user.user_metadata?.full_name || user.user_metadata?.name || user.email.split("@")[0];
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-start p-4 sm:p-8 selection:bg-indigo-500/30">
       <div className="w-full max-w-4xl space-y-10 my-6">
         
-        {/* Main Application Global Header */}
+        {/* Main Application Global Header Navbar Layout */}
         <header className="flex flex-col sm:flex-row justify-between items-center gap-4 border-b border-slate-900 pb-6">
           <div className="text-center sm:text-left space-y-1">
             <h1 className="text-3xl font-black text-white bg-gradient-to-r from-white to-slate-400 bg-clip-text">
@@ -197,16 +209,27 @@ function App() {
             </p>
           </div>
           
-          {/* Header Authorization State Indicators */}
+          {/* Header Authorization State Indicators with Dynamic Branding Name display */}
           {user ? (
-            <div className="flex items-center gap-3 bg-slate-900 px-4 py-2 rounded-xl border border-slate-800">
-              <span className="text-xs font-medium text-slate-300 truncate max-w-[140px]">{user.email}</span>
-              <button onClick={handleLogout} className="text-[10px] font-bold uppercase tracking-wider bg-rose-950/40 text-rose-400 border border-rose-900/40 px-2 py-1 rounded hover:bg-rose-900/30 transition">
+            <div className="flex items-center gap-3 bg-slate-900 border border-indigo-500/20 px-4 py-2 rounded-xl shadow-md">
+              <div className="flex flex-col items-end">
+                <span className="text-xs font-bold text-white tracking-wide">
+                  👋 {getUserDisplayName()}
+                </span>
+                <span className="text-[10px] text-indigo-400 font-mono font-medium">
+                  Unlimited Pro Tier
+                </span>
+              </div>
+              <div className="h-6 w-[1px] bg-slate-800" />
+              <button 
+                onClick={handleLogout} 
+                className="text-[10px] font-bold uppercase tracking-wider bg-slate-800 text-slate-400 hover:text-rose-400 border border-slate-700/60 hover:border-rose-900/40 px-2.5 py-1.5 rounded-lg hover:bg-rose-950/30 transition-all duration-200"
+              >
                 Logout
               </button>
             </div>
           ) : (
-            <div className="text-xs bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-3 py-1.5 rounded-xl font-medium font-mono">
+            <div className="text-xs bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-3 py-1.5 rounded-xl font-medium font-mono shadow-sm">
               🛡️ Free Allowance Remaining: {2 - searchCount < 0 ? 0 : 2 - searchCount} / 2 Left
             </div>
           )}
